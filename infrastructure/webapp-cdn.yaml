@@ -1,0 +1,72 @@
+# Note, Initiate separate CDN Deployment due to time consuming ~(30-40min to complete deploy)
+#
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+    CDN Deployment require Webhosting S3 bucket
+
+####### Condition Setup #######
+#Conditions: 
+#  UseProdEnv: !Equals [ !Sub "${AWS::StackName}-PMHostedZone", "prodCDN" ]
+
+Resources:
+
+  MyCDN:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Origins:
+        - Id: "MyOrigin"
+          DomainName:
+            Fn::ImportValue: !Sub "${AWS::StackName}-S3CloudFrontDN"
+          S3OriginConfig: {}
+        Enabled: 'true'
+        Aliases:
+        - Fn::ImportValue: !Sub "${AWS::StackName}-PMCDNDOMAIN"
+        DefaultCacheBehavior:
+          TargetOriginId: "MyOrigin"
+          ForwardedValues:
+            QueryString: 'false'
+          ViewerProtocolPolicy: "allow-all"
+        ViewerCertificate:
+          AcmCertificateArn:
+            Fn::ImportValue: !Sub "${AWS::StackName}-PMDomain1CertARN"
+          SslSupportMethod: "sni-only"
+        PriceClass: "PriceClass_All"
+
+  Route53CDN:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      HostedZoneName:
+          Fn::Join:
+            - ''
+            - - Fn::ImportValue: !Sub "${AWS::StackName}-PMHostedZone"
+              - "."
+      Comment: "CNAME CDN Record"
+      RecordSets:
+      - Name:
+          Fn::Join:
+            - ''
+            - - Fn::ImportValue: !Sub "${AWS::StackName}-PMCDNDOMAIN"
+              - "."
+        Type: 'CNAME'
+        TTL: '300'
+        ResourceRecords:
+        - !GetAtt "MyCDN.DomainName"
+
+
+Outputs:
+
+  MyCDN:
+    Description: "CDN Reference Id"
+    Value: !Ref "MyCDN"
+
+  MyCDNUrl:
+    Description: "Static Server Site"
+    Value:
+      Fn::Join:
+        - ''
+        - - "http://"
+          - Fn::ImportValue: !Sub "${AWS::StackName}-PMCDNDOMAIN"
+          - "/"
+
